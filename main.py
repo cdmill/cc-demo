@@ -5,7 +5,7 @@ from proxy import CCProxy, CCProxyConfig
 
 
 def main():
-    df = pl.read_csv(f"{Path.cwd()}/sample.csv")
+    df = pl.read_csv(f"{Path.cwd()}/data/sample.csv")
     urls = df["website"].unique()
 
     proxy = CCProxy(
