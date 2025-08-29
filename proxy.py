@@ -49,10 +49,10 @@ class CCProxy:
             - Populates self.records with DataFrames containing URL and content pairs
             - Creates empty DataFrames for years with no successful retrievals
         """
-        for yr in self.cfg.year_range:
+        for yr, idx in self.idxs.items():
             self.records[yr] = pl.DataFrame(schema=["url", "content"])
             for u in urls:
-                records = self._query(u)
+                records = self._query(u, idx)
                 if records:
                     page = self._fetch(records)
                     if page is not None:
