@@ -10,8 +10,9 @@ def main():
 
     proxy = CCProxy(
         CCProxyConfig(
-            agent_decl="cc-demo/0.0.1 (description <email>)",
-            target_month="01",
+            agent_decl="cc (This is for academic research on entrepreneurial strategy, please contact at rylan@umd.edu)",
+            target_months=["January", "February", "March"],
+            year_range=range(2014, 2026),
         )
     )
     proxy.build_records(urls)

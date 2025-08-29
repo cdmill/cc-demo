@@ -3,23 +3,22 @@ from dataclasses import dataclass
 from datetime import datetime
 from urllib.parse import quote_plus
 from pathlib import Path
+import re
 
 import polars as pl
 import requests
 from bs4 import BeautifulSoup
 from warcio.archiveiterator import ArchiveIterator
 
-CC_INIT_YR = 2008
+CC_INIT_YR = 2014
 
 
 @dataclass
 class CCProxyConfig:
     # This tells Common Crawl who is accessing their api, should be descriptive
     agent_decl: str
-    # Format: MM
-    # Ex: January -> "01"
-    target_month: str
-    year_range: range = range(CC_INIT_YR, datetime.now().year)
+    target_months: list[str]
+    year_range: range = range(CC_INIT_YR, datetime.now().year + 1)
     savepath: str = f"{Path.cwd()}/records"
 
 
@@ -50,7 +49,7 @@ class CCProxy:
             - Creates empty DataFrames for years with no successful retrievals
         """
         for yr, idx in self.idxs.items():
-            self.records[yr] = pl.DataFrame(schema=["url", "content"])
+            df = pl.DataFrame(schema=["url", "content"])
             for u in urls:
                 records = self._query(u, idx)
                 if records:
@@ -60,9 +59,18 @@ class CCProxy:
                             soup = BeautifulSoup(page, "html.parser")
                             text = soup.get_text(strip=True, separator=" ")
                             if text:
-                                self.records[yr][u] = text
+                                # INSERT VALIDATION CODE HERE
+                                row = pl.DataFrame([u, text], schema=df.schema)
+                                df = df.vstack(row)
                         except Exception as e:
                             print(f"Error parsing HTML for url {u}: {e}")
+            self.records[yr] = df
+            savepath = Path(self.cfg.savepath)
+            savepath.mkdir(exist_ok=True)
+            if len(df) > 0:
+                filename = savepath / f"{yr}.csv"
+                df.write_csv(filename)
+                print(f"Saved {len(df)} records for {yr} to {filename}")
 
     def save(self):
         """Save all collected records as separate CSV files organized by year.
@@ -119,21 +127,17 @@ class CCProxy:
             exit(1)
         if response.status_code == 200:
             crawls = response.json()
-        for c in crawls:
+        for c in reversed(crawls):
             id = c["id"]
-            if "timegate" in c:
-                # Parse the start date (format: YYYY-MM-DD)
-                start_date = c["timegate"].split("/")[0]
-                if len(start_date) >= 7:  # YYYY-MM format minimum
-                    year_month = start_date[:7]  # YYYY-MM
-                    year = int(year_month[:4])
-                    month = year_month[5:7]
-                    if (
-                        month == self.cfg.target_month
-                        and year in self.cfg.year_range
-                        and year not in idxs
-                    ):
+            if "name" in c:
+                month, year = c["name"].split(" ")[:2]
+                if not year.isdigit():
+                    continue
+                year = int(year)
+                for m in self.cfg.target_months:
+                    if m in month and year in self.cfg.year_range and year not in idxs:
                         idxs[year] = id
+                        break
         return idxs
 
     def _query(self, url: str, idx: str):
